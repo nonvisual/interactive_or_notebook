@@ -1,11 +1,11 @@
 from dataclasses import dataclass
-import pandas as pd
+import numpy as np
 
 
 @dataclass
 class ArticleData:
     name: str
-    demand: pd.DataFrame
+    demand: np.array
     black_price: float
     stock: int
     salvage_value: float

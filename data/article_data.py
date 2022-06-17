@@ -8,4 +8,4 @@ class ArticleData:
     demand: pd.DataFrame
     black_price: float
     stock: int
-    salvage_value = float
+    salvage_value: float

@@ -13,4 +13,5 @@ setup(
     description="Dependencies for interactive OR notebook tutorial",
     long_description=open("README.md").read(),
     python_requires=">=3.6",
+    install_requires=["pulp>=2.6.0", "pandas>=1.1.5"],
 )

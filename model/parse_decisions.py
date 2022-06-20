@@ -11,15 +11,17 @@ def parse_discounts(decision_vars, model):
     indices = set([(i, w) for (i, d, w) in decision_vars.keys() if d == 0])
 
     logging.info(f"Status is optimal, parsing solution")
-    df = pd.Series(
+    df = pd.DataFrame(
         [
-            DEFAULT_DISCOUNTS_GRID[d]
+            d
             for (i, d, w) in decision_vars.keys()
             if decision_vars[i, d, w].varValue > 0.5
         ],
         index=indices,
-        name="solution",
-        dtype=np.float,
+        dtype=np.int64,
     )
+    df = df.reset_index()
+    df.columns = ["article", "week", "discount"]
+    df = df.sort_values(["article", "week"])
     objective = pulp.value(model.objective)
     return df, objective

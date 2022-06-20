@@ -9,7 +9,7 @@ def calculate(discounts: np.array, article_data: ArticleData):
         range(article_data.demand.shape[0])
     ), "unknown discount level, is not on grid"
 
-    choices = [(i, discounts[i]) for i in range(len(discounts))]
+    choices = [(discounts[i], i) for i in range(len(discounts))]
     selected_demand = [article_data.demand[i] for i in choices]
     weekly_sales = []
     weekly_stock = []

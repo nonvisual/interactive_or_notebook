@@ -2,7 +2,7 @@ import imp
 from hypothesis import given
 from data.article_data import ArticleData
 from model.simple_model_creator import create_model
-from model.parse_decisions import parse
+from model.parse_decisions import parse_discounts
 from data.demand_generator import create_random_demand
 import pulp
 import pandas as pd
@@ -26,7 +26,7 @@ def test_simple_model_is_optimal():
         stock=100,
         salvage_value=10.5,
     )
-    model, vars = create_model([sneakers, t_shirts])
+    model, discount_vars = create_model([sneakers, t_shirts])
     status = model.solve()
 
     assert pulp.constants.LpStatus[status] == "Optimal"
@@ -34,15 +34,20 @@ def test_simple_model_is_optimal():
 
 @given(create_random_article())
 def test_is_optimal_and_one_disount_per_decision_is_chosen(article_data):
-    model, vars = create_model([article_data])
+    model, discount_vars = create_model([article_data])
     status = model.solve()
 
     df = pd.Series(
-        [vars[i, d, w].varValue for (i, d, w) in vars.keys()],
-        index=vars.keys(),
+        [
+            discount_vars[i, d, w].varValue
+            for (i, d, w) in discount_vars.keys()
+        ],
+        index=discount_vars.keys(),
         name="solution",
         dtype=np.int64,
     )
     aggregated = df.reset_index().groupby(["level_0", "level_2"]).sum()
+
+    solution, objective = parse_discounts(discount_vars, model)
     assert pulp.constants.LpStatus[status] == "Optimal"
     assert [(aggregated["solution"] == 1).all()]

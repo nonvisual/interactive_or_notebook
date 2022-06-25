@@ -120,21 +120,9 @@ def create_model(
     for i, article in enumerate(articles):
         for w in range(0, weeks_number):
             model += (
-                (stock_vars[i, w - 1] if w > 0 else article.stock)
-                - -pulp.lpSum(
-                    [
-                        sales_vars[i, d, w]
-                        for d in range(len(DEFAULT_DISCOUNTS_GRID))
-                    ]
-                )
-                <= sum(
-                    [
-                        article.demand[d, w]
-                        for d in range(len(DEFAULT_DISCOUNTS_GRID))
-                    ]
-                )
-                * (1 - m_vars[i, w])
-                <= article.stock * m_vars[i, w]
+                stock_vars[i, w - 1]
+                if w > 0
+                else article.stock <= article.stock * m_vars[i, w]
             )
             model += pulp.lpSum(
                 [
@@ -146,7 +134,7 @@ def create_model(
                     sales_vars[i, d, w]
                     for d in range(len(DEFAULT_DISCOUNTS_GRID))
                 ]
-            ) <= sum(
+            ) <= max(
                 [
                     article.demand[d, w]
                     for d in range(len(DEFAULT_DISCOUNTS_GRID))

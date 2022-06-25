@@ -27,7 +27,7 @@ def test_simple_model_is_optimal():
         stock=100,
         salvage_value=10.5,
     )
-    model, discount_vars = create_model([sneakers, t_shirts])
+    model, discount_vars, stock_vars = create_model([sneakers, t_shirts])
     status = model.solve()
 
     assert pulp.constants.LpStatus[status] == "Optimal"
@@ -107,3 +107,33 @@ def test_profit_is_bigger_then_simple_baseline(article_data):
     ) * (
         1 - gap
     ), "Solution objective is below simple 0-discount baseline (accounting for gap)"
+
+
+def test_black_price_scenario_is_optimal():
+    sneakers = ArticleData(
+        name="sneakers",
+        demand=create_random_demand(max_demand=10.0, elasticity=6.5),
+        black_price=65.99,
+        stock=145,
+        salvage_value=65.99,
+    )
+    model, discount_vars, stock_vars = create_model([sneakers])
+    stock = ([stock_vars[i, w].varValue for (i, w) in stock_vars.keys()],)
+
+    status = model.solve(pulp.PULP_CBC_CMD(fracGap=0.001))
+    solution, objective = parse_discounts(discount_vars, model, [sneakers])
+    discounts = solution["discount"].values
+    sales, weekly_stock, weekly_profit, left_value = calculate(
+        discounts, sneakers
+    )
+    (
+        zero_discount_sales,
+        _,
+        zero_discount_weekly_profit,
+        zero_discount_left_value,
+    ) = calculate([0] * len(discounts), sneakers)
+
+    assert pulp.constants.LpStatus[status] == "Optimal"
+    assert sum(weekly_profit) + left_value == (
+        sum(zero_discount_weekly_profit) + zero_discount_left_value
+    )

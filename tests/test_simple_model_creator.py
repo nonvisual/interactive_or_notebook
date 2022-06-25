@@ -1,9 +1,10 @@
 import imp
-from hypothesis import given
+from hypothesis import Phase, given, settings
 from data.article_data import ArticleData
 from model.simple_model_creator import create_model
 from model.parse_decisions import parse_discounts
 from data.demand_generator import create_random_demand
+from evaluation.kpi_calculator import calculate
 import pulp
 import pandas as pd
 import numpy as np
@@ -35,7 +36,8 @@ def test_simple_model_is_optimal():
 @given(create_random_article())
 def test_is_optimal_and_one_disount_per_decision_is_chosen(article_data):
     model, discount_vars = create_model([article_data])
-    status = model.solve()
+    gap = 0.005
+    status = model.solve(pulp.PULP_CBC_CMD(fracGap=gap))
 
     df = pd.Series(
         [
@@ -48,6 +50,60 @@ def test_is_optimal_and_one_disount_per_decision_is_chosen(article_data):
     )
     aggregated = df.reset_index().groupby(["level_0", "level_2"]).sum()
 
-    solution, objective = parse_discounts(discount_vars, model)
+    solution, _ = parse_discounts(discount_vars, model, [article_data])
+    _, _, weekly_profit = calculate(solution["discount"].values, article_data)
     assert pulp.constants.LpStatus[status] == "Optimal"
     assert [(aggregated["solution"] == 1).all()]
+    assert weekly_profit >= [-0.0] * len(
+        weekly_profit
+    ), "Profit should be non-negative"
+
+
+@settings(
+    deadline=700,
+    print_blob=True,
+    max_examples=50,
+    phases=(Phase.explicit, Phase.reuse, Phase.generate, Phase.target),
+)
+@given(create_random_article())
+def test_profit_is_bigger_then_simple_baseline(article_data):
+    model, discount_vars, stock_vars = create_model([article_data])
+    gap = 0.05
+    status = model.solve(pulp.PULP_CBC_CMD(fracGap=gap))
+
+    df = pd.Series(
+        [
+            discount_vars[i, d, w].varValue
+            for (i, d, w) in discount_vars.keys()
+        ],
+        index=discount_vars.keys(),
+        name="solution",
+        dtype=np.int64,
+    )
+
+    stock_df = pd.Series(
+        [stock_vars[i, w].varValue for (i, w) in stock_vars.keys()],
+        index=stock_vars.keys(),
+        name="stock",
+        dtype=np.float,
+    )
+    aggregated = df.reset_index().groupby(["level_0", "level_2"]).sum()
+
+    solution, objective = parse_discounts(discount_vars, model, [article_data])
+    discounts = solution["discount"].values
+    sales, weekly_stock, weekly_profit, left_value = calculate(
+        discounts, article_data
+    )
+    (
+        zero_discount_sales,
+        _,
+        zero_discount_weekly_profit,
+        zero_discount_left_value,
+    ) = calculate([0] * len(discounts), article_data)
+
+    assert pulp.constants.LpStatus[status] == "Optimal"
+    assert sum(weekly_profit) + left_value >= (
+        sum(zero_discount_weekly_profit) + zero_discount_left_value
+    ) * (
+        1 - gap
+    ), "Solution objective is below simple 0-discount baseline (accounting for gap)"

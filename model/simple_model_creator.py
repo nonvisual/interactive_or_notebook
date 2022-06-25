@@ -28,7 +28,8 @@ def create_model(
     indices = [
         (i, d, w)
         for i in range(len(articles))
-        for d, w in np.ndindex(articles[i].demand.shape)
+        for d in range(articles[i].demand.shape[0])
+        for w in range(weeks_number)
     ]
 
     # variables
@@ -40,14 +41,18 @@ def create_model(
     )
     stock_vars = pulp.LpVariable.dicts(
         "Stock",
-        [
-            (i, w)
-            for i in range(len(articles))
-            for w in range(weeks_number + 1)
-        ],
+        [(i, w) for i in range(len(articles)) for w in range(weeks_number)],
         0,
         None,
         pulp.LpContinuous,
+    )
+
+    m_vars = pulp.LpVariable.dicts(
+        "BigMVars",
+        [(i, w) for i in range(len(articles)) for w in range(weeks_number)],
+        0,
+        1,
+        pulp.LpInteger,
     )
 
     # objectives
@@ -67,15 +72,12 @@ def create_model(
             * articles[i].black_price
             for (i, d, w) in indices
         ]
-    ) / (1 + VAT)
-    +pulp.lpSum(
+    ) / (1 + VAT) + pulp.lpSum(
         [
-            stock_vars[i, weeks_number] * article.salvage_value
+            stock_vars[i, weeks_number - 1] * article.salvage_value
             for i, article in enumerate(articles)
         ]
     )
-
-    model += profit if objective == Objective.Profit else revenue
 
     # constraints
     # sales are below demand
@@ -89,15 +91,17 @@ def create_model(
 
     # stock flow constraint
     for i, article in enumerate(articles):
-        for w in range(1, weeks_number + 1):
+        for w in range(1, weeks_number):
             model += stock_vars[i, w] == stock_vars[i, w - 1] - pulp.lpSum(
                 [
-                    sales_vars[i, d, w - 1]
+                    sales_vars[i, d, w]
                     for d in range(len(DEFAULT_DISCOUNTS_GRID))
                 ]
             )
     for i, article in enumerate(articles):
-        stock_vars[i, 0] = article.stock
+        model += stock_vars[i, 0] == article.stock - pulp.lpSum(
+            [sales_vars[i, d, 0] for d in range(len(DEFAULT_DISCOUNTS_GRID))]
+        )
 
     # only one discount is chosen
     for i, article in enumerate(articles):
@@ -112,4 +116,30 @@ def create_model(
                 == 1
             )
 
-    return model, decision_vars
+    # no stock hedging
+    for i, article in enumerate(articles):
+        for w in range(1, weeks_number):
+            model += stock_vars[i, w - 1] <= article.stock * m_vars[i, w]
+            model += pulp.lpSum(
+                [
+                    decision_vars[i, d, w] * article.demand[d, w]
+                    for d in range(len(DEFAULT_DISCOUNTS_GRID))
+                ]
+            ) - pulp.lpSum(
+                [
+                    sales_vars[i, d, w]
+                    for d in range(len(DEFAULT_DISCOUNTS_GRID))
+                ]
+            ) <= sum(
+                [
+                    article.demand[d, w]
+                    for d in range(len(DEFAULT_DISCOUNTS_GRID))
+                ]
+            ) * (
+                1 - m_vars[i, w]
+            )
+
+    # Set objective
+    model += profit if objective == Objective.Profit else revenue
+
+    return model, decision_vars, stock_vars

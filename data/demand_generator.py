@@ -3,7 +3,7 @@ import numpy as np
 import itertools
 
 DEFAULT_DISCOUNTS_GRID = np.arange(0, 0.65, step=0.05)
-DEFAULT_WEEKS_NUMBER = 30
+DEFAULT_WEEKS_NUMBER = 15
 
 
 def create_random_demand(
@@ -13,6 +13,7 @@ def create_random_demand(
     seed: int = 12345,
 ) -> np.array:
     # introduce elasticity concept = now it is entirely random
+    np.random.seed(seed)
     temp_demand = base_demand = (
         np.random.rand(DEFAULT_WEEKS_NUMBER) * max_demand
     )

@@ -56,13 +56,8 @@ def create_model(
     )
 
     # objectives
-    revenue = pulp.lpSum(
-        [
-            sales_vars[i, d, w]
-            * (1 - DEFAULT_DISCOUNTS_GRID[d])
-            * articles[i].black_price
-            for (i, d, w) in indices
-        ]
+    overstock = -pulp.lpSum(
+        [stock_vars[i, weeks_number - 1] for i, article in enumerate(articles)]
     )
 
     profit = pulp.lpSum(
@@ -159,6 +154,6 @@ def create_model(
             )
 
     # Set objective
-    model += profit if objective == Objective.Profit else revenue
+    model += profit if objective == Objective.Profit else overstock
 
     return model, decision_vars, stock_vars

@@ -9,7 +9,7 @@ from data.demand_generator import DEFAULT_DISCOUNTS_GRID, DEFAULT_WEEKS_NUMBER
 
 class Objective(Enum):
     Profit = 1
-    Revenue = 2
+    Overstock = 2
 
 
 VAT = 0.19
@@ -118,8 +118,24 @@ def create_model(
 
     # no stock hedging
     for i, article in enumerate(articles):
-        for w in range(1, weeks_number):
-            model += stock_vars[i, w - 1] <= article.stock * m_vars[i, w]
+        for w in range(0, weeks_number):
+            model += (
+                (stock_vars[i, w - 1] if w > 0 else article.stock)
+                - -pulp.lpSum(
+                    [
+                        sales_vars[i, d, w]
+                        for d in range(len(DEFAULT_DISCOUNTS_GRID))
+                    ]
+                )
+                <= sum(
+                    [
+                        article.demand[d, w]
+                        for d in range(len(DEFAULT_DISCOUNTS_GRID))
+                    ]
+                )
+                * (1 - m_vars[i, w])
+                <= article.stock * m_vars[i, w]
+            )
             model += pulp.lpSum(
                 [
                     decision_vars[i, d, w] * article.demand[d, w]

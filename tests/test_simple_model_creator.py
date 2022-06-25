@@ -1,5 +1,5 @@
 import imp
-from hypothesis import Phase, given, settings
+from hypothesis import Phase, given, reproduce_failure, settings
 from data.article_data import ArticleData
 from model.simple_model_creator import create_model
 from model.parse_decisions import parse_discounts
@@ -33,9 +33,10 @@ def test_simple_model_is_optimal():
     assert pulp.constants.LpStatus[status] == "Optimal"
 
 
+@settings(print_blob=True)
 @given(create_random_article())
-def test_is_optimal_and_one_disount_per_decision_is_chosen(article_data):
-    model, discount_vars = create_model([article_data])
+def test_is_optimal_and_one_discount_per_decision_is_chosen(article_data):
+    model, discount_vars, stock_vars = create_model([article_data])
     gap = 0.005
     status = model.solve(pulp.PULP_CBC_CMD(fracGap=gap))
 
@@ -51,11 +52,13 @@ def test_is_optimal_and_one_disount_per_decision_is_chosen(article_data):
     aggregated = df.reset_index().groupby(["level_0", "level_2"]).sum()
 
     solution, _ = parse_discounts(discount_vars, model, [article_data])
-    _, _, weekly_profit = calculate(solution["discount"].values, article_data)
+    _, _, weekly_profit, left_value = calculate(
+        solution["discount"].values, article_data
+    )
     assert pulp.constants.LpStatus[status] == "Optimal"
     assert [(aggregated["solution"] == 1).all()]
-    assert weekly_profit >= [-0.0] * len(
-        weekly_profit
+    assert all(
+        i >= -0.0 for i in weekly_profit
     ), "Profit should be non-negative"
 
 
@@ -73,7 +76,7 @@ def test_profit_is_bigger_then_simple_baseline(article_data):
 
     df = pd.Series(
         [
-            discount_vars[i, d, w].varValue
+            int(discount_vars[i, d, w].varValue)
             for (i, d, w) in discount_vars.keys()
         ],
         index=discount_vars.keys(),
@@ -85,7 +88,7 @@ def test_profit_is_bigger_then_simple_baseline(article_data):
         [stock_vars[i, w].varValue for (i, w) in stock_vars.keys()],
         index=stock_vars.keys(),
         name="stock",
-        dtype=np.float,
+        dtype=float,
     )
     aggregated = df.reset_index().groupby(["level_0", "level_2"]).sum()
 

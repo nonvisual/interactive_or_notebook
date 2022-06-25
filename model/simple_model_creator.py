@@ -115,6 +115,7 @@ def create_model(
                 )
                 == 1
             )
+    slack = 0.001
 
     # no stock hedging
     for i, article in enumerate(articles):
@@ -122,25 +123,39 @@ def create_model(
             model += (
                 stock_vars[i, w - 1]
                 if w > 0
-                else article.stock <= article.stock * m_vars[i, w]
+                else (
+                    article.stock
+                    - pulp.lpSum(
+                        [
+                            sales_vars[i, d, w]
+                            for d in range(len(DEFAULT_DISCOUNTS_GRID))
+                        ]
+                    )
+                )
+                <= 1.1 * article.stock * m_vars[i, w] + slack
             )
-            model += pulp.lpSum(
-                [
-                    decision_vars[i, d, w] * article.demand[d, w]
-                    for d in range(len(DEFAULT_DISCOUNTS_GRID))
-                ]
-            ) - pulp.lpSum(
-                [
-                    sales_vars[i, d, w]
-                    for d in range(len(DEFAULT_DISCOUNTS_GRID))
-                ]
-            ) <= max(
-                [
-                    article.demand[d, w]
-                    for d in range(len(DEFAULT_DISCOUNTS_GRID))
-                ]
-            ) * (
-                1 - m_vars[i, w]
+            model += (
+                pulp.lpSum(
+                    [
+                        decision_vars[i, d, w] * article.demand[d, w]
+                        for d in range(len(DEFAULT_DISCOUNTS_GRID))
+                    ]
+                )
+                - pulp.lpSum(
+                    [
+                        sales_vars[i, d, w]
+                        for d in range(len(DEFAULT_DISCOUNTS_GRID))
+                    ]
+                )
+                <= 1.1
+                * max(
+                    [
+                        article.demand[d, w]
+                        for d in range(len(DEFAULT_DISCOUNTS_GRID))
+                    ]
+                )
+                * (1 - m_vars[i, w])
+                + slack
             )
 
     # Set objective
